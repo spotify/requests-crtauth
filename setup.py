@@ -4,8 +4,8 @@
 from setuptools import setup
 
 setup(
-    name='requests_crtauth',
-    version='0.0.1',
+    name='requests-crtauth',
+    version='0.1.0',
     packages=['requests_crtauth'],
     provides=['requests_crtauth'],
     install_requires=[
