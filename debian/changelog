@@ -1,3 +1,9 @@
+python-requests-crtauth (0.1.1) unstable; urgency=low
+
+  * Depend on requests >= 2.2.1 - https://ghe.spotify.net/negz/requests-crtauth/issues/2
+
+ -- Nic Cope <negz@spotify.com>  Mon, 2 June 2014 00:00:00 +0000
+
 python-requests-crtauth (0.1.0) unstable; urgency=low
 
   * Initial release.
