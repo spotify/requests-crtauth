@@ -12,13 +12,6 @@ new Pipeline(this) {{ build {
       jenkinsPipeline.inSteps {
         shell(readFileFromWorkspace('.spotify/pipelines/tox.sh'))
         }
-        publishers {
-          cobertura("**/coverage.xml") {
-            onlyStable(true)
-            failNoReports true
-            lineTarget(80, 80, 80)
-          }
-        }
       }
     }
 }}}
