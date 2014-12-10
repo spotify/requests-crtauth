@@ -93,6 +93,11 @@ class HttpCrtAuth(requests.auth.AuthBase):
         Raises:
             HttpCrtAuthError: When the X-CHAP:challenge header is missing.
         """
+        if response.status_code / 400 == 1:
+            raise HttpCrtAuthError(
+                ('%s response in challenge reply. '
+                    '(Is the server aware of your username or key?)') %
+                response.status_code)
         if 'X-CHAP' not in response.headers:
             raise HttpCrtAuthError('Missing CHAP headers in challenge reply.')
 
