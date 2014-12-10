@@ -11,10 +11,6 @@ new Pipeline(this) {{ build {
       jenkinsPipeline.inSteps {
         shell(readFileFromWorkspace('.spotify/pipelines/tox.sh'))
       }
-          failNoReports true
-          lineTarget(80, 80, 80)
-        }
-      }
     }
   }
   group(name: 'PyPi Build & Upload') {
