@@ -6,7 +6,7 @@ import os
 import urlparse
 
 from crtauth import ssh as crtauth_ssh
-from crtauth import server as crtauth_server
+from crtauth import client as crtauth_client
 import requests
 
 
@@ -108,7 +108,7 @@ class HttpCrtAuth(requests.auth.AuthBase):
         logging.debug('Sending response to challenge %s', chap_challenge)
         server_netloc = urlparse.urlparse(response.request.url).netloc
         server_name = server_netloc.split(':')[0]
-        challenge_response = crtauth_server.create_response(chap_challenge,
+        challenge_response = crtauth_client.create_response(chap_challenge,
                                                             server_name,
                                                             self.signer)
         response.request.method = 'HEAD'
