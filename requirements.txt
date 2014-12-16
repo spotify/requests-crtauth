@@ -1,2 +1,2 @@
 requests<=2.2.1
-crtauth>=0.1.2
+crtauth==0.1.3
