@@ -4,7 +4,7 @@ import javaposse.jobdsl.dsl.Job
 
 
 new Pipeline(this) {{ build {
-  notify.byMail(recipients: 'alf+build@spotify.com')
+  // TODO(negz): ALF-2117 Notify committer only when the build breaks.
 
   group(name: 'Test') {
     jenkinsPipeline.inJob {
