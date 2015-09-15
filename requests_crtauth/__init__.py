@@ -6,7 +6,7 @@ import os
 import urlparse
 
 from crtauth import ssh as crtauth_ssh
-from crtauth import server as crtauth_server
+from crtauth import client as crtauth_client
 import requests
 
 
@@ -15,7 +15,7 @@ class HttpCrtAuthError(requests.exceptions.RequestException):
 
 
 class HttpCrtAuth(requests.auth.AuthBase):
-    def __init__(self, username=None, private_key=None, signer=None):
+    def __init__(self, username=None, private_key=None, signer=None, version=1):
         """HTTP crtauth authentication using the requests library.
 
         Args:
@@ -23,6 +23,7 @@ class HttpCrtAuth(requests.auth.AuthBase):
             private_key: A PEM encoded private key string. Overrides signer.
             signer: A crtauth SigningPlug instance. Defaults to using the
                 SSH agent (AgentSigner).
+            version: Integer version of the crtauth protocol.
         """
         self.username = username or os.environ.get('USER')
         if private_key:
@@ -30,25 +31,7 @@ class HttpCrtAuth(requests.auth.AuthBase):
         else:
             self.signer = signer
         self.chap_token = None
-
-    def _parse_chap_header(self, headers):
-        """Parses the X-CHAP header.
-
-        CHAP headers are encoded like:
-            X-CHAP:request:negz
-            X-CHAP:challenge:butts
-            X-CHAP:response:moo
-            X-CHAP:token:zomgauthentication
-
-        Each HTTP request or response should have a single X-CHAP header.
-
-        Args:
-            headers: A case insensitive dictionary of HTTP headers.
-
-        Returns:
-            A tuple like (chap_header_key, chap_header_value).
-        """
-        return tuple([s.strip() for s in headers['X-CHAP'].split(':', 1)])
+        self.version = version
 
     def _challenge_request(self, response, **kwargs):
         """Forms a CHAP request based on a real PreparedRequest.
@@ -62,19 +45,17 @@ class HttpCrtAuth(requests.auth.AuthBase):
                 'X-CHAP:challenge' header.
         """
         logging.debug('Sending challenge request')
-        parsed_url = urlparse.urlparse(response.request.url)
-        parsed_auth_url = urlparse.ParseResult(parsed_url.scheme,
-                                               parsed_url.netloc,
-                                               '/_auth',
-                                               parsed_url.params,
-                                               parsed_url.query,
-                                               parsed_url.fragment)
-        response.request.method = 'HEAD'
-        response.request.headers['X-CHAP'] = 'request:%s' % self.username
-        response.request.url = parsed_auth_url.geturl()
-        response.close()
-        challenge_response = response.connection.send(response.request,
-                                                      **kwargs)
+        request = _consume_response(response)
+        if self.version == 0:
+            challenge = self.username
+        else:
+            challenge = crtauth_client.create_request(self.username)
+        request.headers['X-CHAP'] = 'request:%s' % challenge
+        request.url = _auth_url(request.url)
+        # HEAD is no longer required as of crtauth 0.99.3, but it shouldn't
+        # hurt for compatibility with older versions.
+        request.method = 'HEAD'
+        challenge_response = response.connection.send(request, **kwargs)
         challenge_response.history.append(response)
         return challenge_response
 
@@ -101,20 +82,18 @@ class HttpCrtAuth(requests.auth.AuthBase):
         if 'X-CHAP' not in response.headers:
             raise HttpCrtAuthError('Missing CHAP headers in challenge reply.')
 
-        chap_type, chap_challenge = self._parse_chap_header(response.headers)
+        chap_type, chap_challenge = _parse_chap_header(response.headers)
         if chap_type != 'challenge':
             raise HttpCrtAuthError('Missing CHAP challenge in challenge reply.')
 
         logging.debug('Sending response to challenge %s', chap_challenge)
-        server_netloc = urlparse.urlparse(response.request.url).netloc
-        server_name = server_netloc.split(':')[0]
-        challenge_response = crtauth_server.create_response(chap_challenge,
-                                                            server_name,
-                                                            self.signer)
-        response.request.method = 'HEAD'
-        response.request.headers['X-CHAP'] = 'response:%s' % challenge_response
-        response.close()
-        token_reply = response.connection.send(response.request, **kwargs)
+        request = _consume_response(response)
+        challenge_response = crtauth_client.create_response(
+            chap_challenge,
+            _crtauth_server_name(request.url),
+            self.signer)
+        request.headers['X-CHAP'] = 'response:%s' % challenge_response
+        token_reply = response.connection.send(request, **kwargs)
         token_reply.history.append(response)
         return token_reply
 
@@ -131,7 +110,7 @@ class HttpCrtAuth(requests.auth.AuthBase):
         if 'X-CHAP' not in response.headers:
             raise HttpCrtAuthError('Missing CHAP headers in token reply.')
 
-        chap_type, chap_token = self._parse_chap_header(response.headers)
+        chap_type, chap_token = _parse_chap_header(response.headers)
         if chap_type != 'token':
             raise HttpCrtAuthError('Missing CHAP token in token reply.')
 
@@ -152,9 +131,9 @@ class HttpCrtAuth(requests.auth.AuthBase):
         if not self.chap_token:
             raise HttpCrtAuthError('No CHAP token stored.')
         logging.debug('Using newly stored CHAP token.')
-        response.request.headers['Authorization'] = 'chap:%s' % self.chap_token
-        response.close()
-        authd_response = response.connection.send(response.request, **kwargs)
+        request = _consume_response(response)
+        request.headers['Authorization'] = 'chap:%s' % self.chap_token
+        authd_response = response.connection.send(request, **kwargs)
         authd_response.history.append(response)
         return authd_response
 
@@ -173,7 +152,7 @@ class HttpCrtAuth(requests.auth.AuthBase):
             An instance of requests.Response()
         """
         if response.status_code == 401:
-            original_request = copy_request(response.request)
+            original_request = _consume_response(response)
             challenge_response = self._challenge_request(response, **kwargs)
             token_reply = self._challenge_response(challenge_response, **kwargs)
             self._store_chap_token(token_reply)
@@ -192,21 +171,67 @@ class HttpCrtAuth(requests.auth.AuthBase):
         return request
 
 
-def copy_request(request):
-    """Copies a PreparedRequest.
+def _crtauth_server_name(url):
+    """Returns the server name (FQDN) based on the request URL.
 
     Args:
-        request: An instance of requests.PreparedRequest()
+        url: String, the original request.url
 
     Returns:
-        A naive copy of request.
+        String, the server name for crtauth authentication.
     """
-    new_request = requests.PreparedRequest()
+    server_netloc = urlparse.urlparse(url).netloc
+    return server_netloc.split(':')[0]
 
-    new_request.method = request.method
-    new_request.url = request.url
-    new_request.body = request.body
-    new_request.hooks = request.hooks
-    new_request.headers = request.headers.copy()
 
-    return new_request
+def _auth_url(url):
+    """Returns the authentication URL based on the URL originally requested.
+
+    Args:
+        url: String, the original request.url
+
+    Returns:
+        String, the authentication URL.
+    """
+    parsed_url = urlparse.urlparse(url)
+    parsed_auth_url = urlparse.ParseResult(parsed_url.scheme,
+                                           parsed_url.netloc,
+                                           '/_auth',
+                                           parsed_url.params,
+                                           parsed_url.query,
+                                           parsed_url.fragment)
+    return parsed_auth_url.geturl()
+
+
+def _parse_chap_header(headers):
+    """Parses the X-CHAP header.
+
+    CHAP headers are encoded like:
+        X-CHAP:request:negz
+        X-CHAP:challenge:butts
+        X-CHAP:response:moo
+        X-CHAP:token:zomgauthentication
+
+    Each HTTP request or response should have a single X-CHAP header.
+
+    Args:
+        headers: A case insensitive dictionary of HTTP headers.
+
+    Returns:
+        A tuple like (chap_header_key, chap_header_value).
+    """
+    return tuple([s.strip() for s in headers['X-CHAP'].split(':', 1)])
+
+
+def _consume_response(response):
+    """Consume content and release the original connection.
+
+    Args:
+        response: A requests.Response to whose connection to reuse.
+
+    Returns:
+        requests.PreparedRequest, a copy of the response's request.
+    """
+    response.content
+    response.close()
+    return response.request.copy()
