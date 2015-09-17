@@ -1,6 +1,6 @@
 requests-crtauth
 ================
-A plugin to support [crtauth authentication](https://github.com/spotify/crtauth) in [Python Requests](http://www.python-requests.org/). 
+A plugin to support [crtauth authentication](https://github.com/spotify/crtauth) in [Python Requests](http://www.python-requests.org/).
 
 Usage
 =====
