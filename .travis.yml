@@ -1,7 +1,15 @@
 language: python
 env:
-  - TOXENV=py27
+- TOXENV=py27
 install:
-  - pip install tox
+- pip install tox
 script:
-  - tox
+- tox
+deploy:
+  provider: pypi
+  user: negz
+  password:
+    secure: gzxdmLLQaczhtggz+uNVBQ+YkuddyZdLMyHrF0m/sXt4o9+S1JOowEdg2b2xjSBIy4i07uTrwinG6MgS2pN99hEmC1HrdeRMeNIS9OXxpmDL7CNWSCdi4xYWD2Ory50Bsd3/GFkNAaj9hFjH0AH7W5OywK3PsC6G1jBbKKuhMLy7z1j/2ljXp4ZuYFE3w01QRdRYmFcCrIv8TUoijnwoij+8eZmJe88E7SfNlEE1NdMiEIs1QYTFtP+0P72JUzVcv6vAJjcUfqIyxSvrVtzzMZc7Xr9R7XXbNhbPGGDi1hFdsWr6zI/aDkzXxXBdAeHoQDeAIt1W1t8FL+zcZcOjYs4DJ9naC60V66KopLr//itttMs6P+WuOZCy04dZoJlcorx/jbSNAdfsvphUHhLUjrn6M6u85n9cvbIeSh4Vs9o7axJPDviR6b2m9D7kB6Fh4/U9iubrsBg7UJN04RJq4pI5FaClqrh4iRvo/o8ceDcgWsNDnh4SCjWZ8lcJBjQbckHJKbQ2cAHhzk1XdCQ05PN7INIaUl1HxKuQbUbqK9aqxclzayHepdOSpmygB4sRKopMHiZrGfbkH4wBlSnSIm6FmesDoQVA5rww4uSMIm/G4vQbumRhwr0FeMXgwNLU9sZ7Reky7mUjNWw75HTNbpcE3GAKDVhejOEFoRei0NM=
+  on:
+    tags: true
+    repo: spotify/requests-crtauth
