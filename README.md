@@ -1,5 +1,7 @@
 requests-crtauth
 ================
+[![Build Status](https://travis-ci.org/spotify/requests-crtauth.svg)](https://travis-ci.org/spotify/requests-crtauth)
+
 A plugin to support [crtauth authentication](https://github.com/spotify/crtauth) in [Python Requests](http://www.python-requests.org/).
 
 Usage
